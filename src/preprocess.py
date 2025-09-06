@@ -1,0 +1,77 @@
+import pandas as pd
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
+import joblib
+import os
+
+def parse_bandwidth(bandwidth_str):
+    if 'Mbps' in bandwidth_str:
+        return float(bandwidth_str.replace(' Mbps', ''))
+    elif 'Kbps' in bandwidth_str:
+        return float(bandwidth_str.replace(' Kbps', '')) / 1000
+    else:
+        return float(bandwidth_str)
+
+def preprocess_data(input_path, output_path = "data/processed/", models_path = "models/", test_size=0.2):
+    # Load data
+    df = pd.read_csv(input_path)
+
+    df.columns = df.columns.str.replace('_', ' ')
+    df['Application Type'] = df['Application Type'].str.replace('_', ' ')
+
+    # Drop unnecessary columns
+    df = df.drop(columns=["Timestamp", "User ID"])
+
+    # Convert object columns to numerical
+    df['Signal Strength'] = df['Signal Strength'].str.replace(' dBm', '').astype(float)
+    df['Latency'] = df['Latency'].str.replace(' ms', '').astype(float)
+    df['Resource Allocation'] = df['Resource Allocation'].str.replace('%', '').astype(float)
+    df['Required Bandwidth'] = df['Required Bandwidth'].apply(parse_bandwidth)
+    df['Allocated Bandwidth'] = df['Allocated Bandwidth'].apply(parse_bandwidth)
+
+    # Encode application type
+    encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore') # Numpy array output
+    app_type_encoded = encoder.fit_transform(df[['Application Type']])
+    app_type_df = pd.DataFrame(app_type_encoded, columns=encoder.get_feature_names_out(['Application Type']))
+    df = pd.concat([df.drop(columns=['Application Type']), app_type_df], axis=1)
+
+    # Save the encoder
+    os.makedirs(models_path, exist_ok=True)
+    encoder_path = os.path.join(models_path, 'encoder.pkl')
+    joblib.dump(encoder, encoder_path)  
+    print(f"Encoder saved to {encoder_path}")
+
+    # Train-test split
+    train_df, test_df = train_test_split(df, test_size=test_size, random_state=42)
+
+    # Scale numerical features
+    numeric_features = ['Signal Strength', 'Latency', 'Resource Allocation', 'Required Bandwidth', 'Allocated Bandwidth']
+    scaler = MinMaxScaler()
+    train_df[numeric_features] = scaler.fit_transform(train_df[numeric_features])
+    test_df[numeric_features] = scaler.transform(test_df[numeric_features])
+
+    # Save the scaler
+    scaler_path = os.path.join(models_path, 'scaler.pkl')
+    joblib.dump(scaler, scaler_path)
+    print(f"Scaler saved to {scaler_path}")
+
+    # Save processed data
+    os.makedirs(output_path, exist_ok=True)
+    train_path = os.path.join(output_path, 'train_data.csv')
+    test_path = os.path.join(output_path, 'test_data.csv')
+    train_df.to_csv(train_path, index=False)
+    test_df.to_csv(test_path, index=False)
+    print(f"Processed training data saved to {train_path}")
+    print(f"Processed testing data saved to {test_path}")
+    
+    return train_df, test_df
+
+
+def encode_application_type(app_type_str, models_path = "models/"):
+    encoder_path = os.path.join(models_path, 'encoder.pkl')
+    if not os.path.exists(encoder_path):
+        raise FileNotFoundError(f"Encoder not found at {encoder_path}. Please run preprocess_data first.")
+    encoder = joblib.load(encoder_path)
+    app_type_df = pd.DataFrame({'Application Type': [app_type_str]})
+    app_type_encoded = encoder.transform(app_type_df)
+    return pd.DataFrame(app_type_encoded, columns=encoder.get_feature_names_out(['Application Type']))
