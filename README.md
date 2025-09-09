@@ -24,5 +24,5 @@ Resource_Allocation: Tỷ lệ phân bổ tài nguyên (%).
 ## Tiến độ
 - [x] Thiết lập cấu trúc project
 - [x] Khám phá dữ liệu 
-- [x] Tiền xử lý dữ liệu (xóa cột, chuyển kiểu ,chia train/test với logging,...)
+- [x] Tiền xử lý dữ liệu (xóa cột, chuyển kiểu ,chia train/test, cân bằng dữ liệu dựa trên target (RA) )
 - [ ] Data Augmentation bằng GAN
