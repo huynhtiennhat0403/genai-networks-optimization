@@ -1,6 +1,7 @@
 import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
+from sklearn.utils import resample
 import joblib
 import os
 
@@ -11,6 +12,37 @@ def parse_bandwidth(bandwidth_str):
         return float(bandwidth_str.replace(' Kbps', '')) / 1000
     else:
         return float(bandwidth_str)
+    
+def balance_data(df, target_col='Resource Allocation', target_values=[50,55,60,65,70,75,80,85,90], target_size=70, random_state=42):
+    balanced_frames = []
+    for val in target_values:
+        subset = df[df[target_col] == val]
+
+        if len(subset) == 0:
+            continue  # bỏ qua nếu không có mẫu nào
+
+        if val == 70:
+            # undersample nếu nhiều hơn 70
+            subset_balanced = resample(
+                subset,
+                replace=False,
+                n_samples=min(target_size, len(subset)),
+                random_state=random_state
+            )
+        else:
+            # oversample nếu ít hơn 70
+            subset_balanced = resample(
+                subset,
+                replace=True,
+                n_samples=target_size,
+                random_state=random_state
+            )
+
+        balanced_frames.append(subset_balanced)
+
+    df_balanced = pd.concat(balanced_frames).reset_index(drop=True)
+    return df_balanced
+
 
 def preprocess_data(input_path, output_path = "data/processed/", models_path = "models/", test_size=0.2):
     # Load data
@@ -34,6 +66,11 @@ def preprocess_data(input_path, output_path = "data/processed/", models_path = "
     app_type_encoded = encoder.fit_transform(df[['Application Type']])
     app_type_df = pd.DataFrame(app_type_encoded, columns=encoder.get_feature_names_out(['Application Type']))
     df = pd.concat([df.drop(columns=['Application Type']), app_type_df], axis=1)
+
+    # Balance data
+    df['Resource Allocation'] = df['Resource Allocation'].astype(int)
+    df = balance_data(df, target_col='Resource Allocation')
+    print(f"Data shape after balancing: {df.shape}")
 
     # Save the encoder
     os.makedirs(models_path, exist_ok=True)
